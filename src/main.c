@@ -1,17 +1,18 @@
 #include "stm32f1xx_hal.h"
+
 #ifdef USE_QEMU
-#include <stdio.h> // For printf (which will go to QEMU's serial)
+// These headers are ONLY for the QEMU build (using SocketCAN)
+#include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-// SocketCAN headers for QEMU
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
-
 #else
+// These headers are for the REAL STM32 hardware
 #include "stm32f1xx_hal_can.h"
 #include "stm32f1xx_hal_uart.h"
 #include <stdio.h>
@@ -113,15 +114,11 @@ int main(void) {
 
 void SystemClock_Config(void)
 {
-// This clock configuration *should* work in both QEMU and on real hardware,
-  // but you might need to adjust it for QEMU if you encounter issues.
+// This clock configuration *should* work in both QEMU and on real hardware.
 
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -134,8 +131,6 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
@@ -151,18 +146,17 @@ void SystemClock_Config(void)
 
 #ifndef USE_QEMU
 void CAN_Init(void) {
- // ... (The original CAN_Init function for real hardware) ...
     __HAL_RCC_CAN1_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
     // --- GPIO Configuration ---
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin = GPIO_PIN_11; // CAN RX (PA11 - check your board!)
+    GPIO_InitStruct.Pin = GPIO_PIN_11; // CAN RX (PA11)
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = GPIO_PIN_12; // CAN TX (PA12 - check your board!)
+    GPIO_InitStruct.Pin = GPIO_PIN_12; // CAN TX (PA12)
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -178,9 +172,6 @@ void CAN_Init(void) {
      hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
 
     // --- Bit Timing for 125kbps (CRITICAL!) ---
-    // Example for 125kbps with 72MHz APB1 clock (PCLK1):
-    // Assuming Tq = 1/8MHz,  Target Bit Rate = 125kbps.
-    // (These are EXAMPLES - you MUST verify them using a calculator!)
     hcan.Init.Prescaler = 36;     // 72MHz / 36 = 2MHz , Tq = 0.5 us
     hcan.Init.TimeSeg1 = CAN_BS1_13TQ;  //  (1 + 13) * 0.5 us = 7 us
     hcan.Init.TimeSeg2 = CAN_BS2_2TQ;   // 2 * 0.5  us= 1 us
@@ -217,7 +208,6 @@ void CAN_Init(void) {
 }
 
 void UART_Init(void) {
- // ... (The original UART_Init function for real hardware) ...
      __HAL_RCC_USART1_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
@@ -256,42 +246,40 @@ void UART_Init(void) {
 }
 
 void GPIO_Status_Init(void) {
-    // ... (The original GPIO_Status_Init function) ...
       __HAL_RCC_GPIOB_CLK_ENABLE(); // Enable GPIOB clock
 
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     // --- IGN/ACC Pin ---
     GPIO_InitStruct.Pin = IGN_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; // Changed to OUTPUT
-    GPIO_InitStruct.Pull = GPIO_NOPULL; // No pull-up/down needed
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; //  OUTPUT
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(IGN_PORT, &GPIO_InitStruct);
 
     // --- ILLUM Pin ---
     GPIO_InitStruct.Pin = ILLUM_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; // Changed to OUTPUT
-    GPIO_InitStruct.Pull = GPIO_NOPULL; // No pull-up/down needed
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; //  OUTPUT
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
      GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(ILLUM_PORT, &GPIO_InitStruct);
 
     // --- PARK Pin ---
     GPIO_InitStruct.Pin = PARK_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; // Changed to OUTPUT
-    GPIO_InitStruct.Pull = GPIO_NOPULL; // No pull-up/down needed
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; //  OUTPUT
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
      GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(PARK_PORT, &GPIO_InitStruct);
 
     // --- REAR Pin ---
     GPIO_InitStruct.Pin = REAR_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; // Changed to OUTPUT
-    GPIO_InitStruct.Pull = GPIO_NOPULL; // No pull-up/down needed
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; //  OUTPUT
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
      GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(REAR_PORT, &GPIO_InitStruct);
 }
 
 void CAN_Transmit(uint32_t id, uint8_t *data, uint8_t len) {
- // ... (The original CAN_Transmit function for real hardware) ...
      CAN_TxHeaderTypeDef TxHeader;
     uint8_t TxData[8];
     uint32_t TxMailbox;
@@ -313,7 +301,6 @@ void CAN_Transmit(uint32_t id, uint8_t *data, uint8_t len) {
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
-    // ... (The original CAN RX callback) ...
      CAN_RxHeaderTypeDef RxHeader;
     uint8_t RxData[8];
 
@@ -325,7 +312,6 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 }
 
 void USART1_IRQHandler(void) {
- // ... (The original UART RX interrupt handler) ...
   if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE)) {
 
         static uint8_t rx_buffer[64];
@@ -459,7 +445,6 @@ void SendToAndroid(const char *response, const char *value) {
 }
 
 void ProcessAndroidCommand(const char *command, const char *value) {
-// ... (The original ProcessAndroidCommand function, no changes needed) ...
  if (strcmp(command, CMD_RESET) == 0) {
         HAL_NVIC_SystemReset(); // Consider re-initializing peripherals instead
     } else if (strcmp(command, CMD_KEY) == 0) {
@@ -519,7 +504,6 @@ void CheckStatusSignals(void) {
     bool current_ign_state = HAL_GPIO_ReadPin(IGN_PORT, IGN_PIN) == GPIO_PIN_SET;
     if (current_ign_state != ign_state) {
         ign_state = current_ign_state;
-        //  HAL_GPIO_WritePin(IGN_PORT, IGN_PIN, ign_state ? GPIO_PIN_SET : GPIO_PIN_RESET); // Set output pin
          SendToAndroid(RESP_IGN, ign_state ? "ON" : "OFF");
 
     }
@@ -531,7 +515,6 @@ void CheckStatusSignals(void) {
     bool current_illum_state = HAL_GPIO_ReadPin(ILLUM_PORT, ILLUM_PIN) == GPIO_PIN_SET;
     if (current_illum_state != illum_state) {
         illum_state = current_illum_state;
-       // HAL_GPIO_WritePin(ILLUM_PORT, ILLUM_PIN, illum_state ? GPIO_PIN_SET : GPIO_PIN_RESET); // Set output pin
         SendToAndroid(RESP_ILLUM, illum_state ? "ON" : "OFF");
     }
     // --- Set ILLUM ---
@@ -541,7 +524,6 @@ void CheckStatusSignals(void) {
     bool current_park_state = HAL_GPIO_ReadPin(PARK_PORT, PARK_PIN) == GPIO_PIN_RESET; // Active low
     if (current_park_state != park_state) {
         park_state = current_park_state;
-       // HAL_GPIO_WritePin(PARK_PORT, PARK_PIN, park_state ? GPIO_PIN_RESET : GPIO_PIN_SET); // Set output pin, note the inverted logic
         SendToAndroid(RESP_PARK, park_state ? "ON" : "OFF");
     }
     // --- Set PARK ---
@@ -551,7 +533,6 @@ void CheckStatusSignals(void) {
     bool current_rear_state = HAL_GPIO_ReadPin(REAR_PORT, REAR_PIN) == GPIO_PIN_SET;
     if (current_rear_state != rear_state) {
         rear_state = current_rear_state;
-        //HAL_GPIO_WritePin(REAR_PORT, REAR_PIN, rear_state ? GPIO_PIN_SET : GPIO_PIN_RESET); // Set output pin
         SendToAndroid(RESP_REAR, rear_state ? "ON" : "OFF");
     }
 
