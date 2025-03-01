@@ -2,6 +2,7 @@
 #include "uart.h" // For SendToAndroid
 #include "config.h" // For configuration
 #include <string.h>
+#include <stdio.h>
 
 void ProcessAndroidCommand(const char *command, const char *value) {
  // ... (ProcessAndroidCommand code - Moved here) ...

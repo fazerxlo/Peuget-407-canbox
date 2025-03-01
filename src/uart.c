@@ -1,9 +1,20 @@
 #include "uart.h"
 #include "commands.h" // For ProcessAndroidCommand
+#include <stdio.h> // Required for QEMU build (printf, fflush)
+#include <string.h> //Required for string functions.
 
 #ifndef USE_QEMU
 UART_HandleTypeDef huart1; // Define huart1 here
+#else
+// Minimal placeholder for huart1 in QEMU mode.
+//  We don't *use* it, but the compiler needs to see a definition
+//  because USART1_IRQHandler references it.
+typedef struct {
+    volatile uint32_t Instance; // Just a dummy member
+} UART_HandleTypeDef;
+UART_HandleTypeDef huart1;
 #endif
+// ... (Rest of UART_Init - No Changes) ...
 
 void UART_Init(void) {
 // ... (All the UART initialization code from the original main.c) ...
@@ -43,6 +54,7 @@ void UART_Init(void) {
     HAL_NVIC_EnableIRQ(USART1_IRQn);
     __HAL_UART_ENABLE_IT(&huart1, UART_IT_RXNE);
 }
+
 #ifndef USE_QEMU
 void USART1_IRQHandler(void) {
  // ... (All the UART RX interrupt handler code) ...

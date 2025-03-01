@@ -4,6 +4,7 @@
 #include "config.h"
 #include "signals.h"
 #include "commands.h"
+#include <stdio.h>
 
 int main(void) {
     HAL_Init();
