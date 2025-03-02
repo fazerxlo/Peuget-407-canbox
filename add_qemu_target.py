@@ -1,4 +1,4 @@
-Import("env")
+Import("env") # type: ignore
 import subprocess
 
 def qemu_target(env):
@@ -41,4 +41,4 @@ except FileNotFoundError:
 except subprocess.CalledProcessError as e:
     print(f"Error checking QEMU version: {e}")
 
-qemu_target(env) # Call the function to add the target
+qemu_target(env) # type: ignore # Call the function to add the target
