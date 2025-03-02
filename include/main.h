@@ -49,6 +49,5 @@ extern uint32_t config_park_src;
 extern uint32_t config_door_src;
 
 void Error_Handler(void);
-void LoadConfig(void); // Assuming LoadConfig is in main.c
 
 #endif // MAIN_H

@@ -9,7 +9,6 @@ void SystemClock_Config(void);
 void Error_Handler(void);
 
 void SystemClock_Config(void) {
-    // ... (Clock configuration code - Remains unchanged) ...
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
@@ -43,10 +42,37 @@ void SystemClock_Config(void) {
  * @retval None
  */
 void Error_Handler(void) {
-    /* User can add his own implementation to report the HAL error return state */
+    // Disable interrupts.  This prevents any further interrupts from
+    // interfering with the reset process.
     __disable_irq();
-    while (1) {
-    }
+
+    // Optional:  Send an error message to the Android head unit *before*
+    // resetting.  This is useful for debugging.
+    SendToAndroid(RESP_ERR, "FATAL_ERROR");
+
+    // Add a short delay to allow the UART transmission to complete.
+    // This is important; otherwise, the message might not be sent before
+    // the reset.
+    HAL_Delay(100);
+
+    // Re-initialize peripherals.  This is crucial for a clean restart.
+    // We call the same initialization functions as in main().
+
+#ifndef USE_QEMU  // Only re-initialize hardware peripherals on the real device
+    HAL_DeInit(); // Deinitialize HAL. Reset all peripherals to default state.
+    HAL_Init();   // Reinitialize HAL
+    SystemClock_Config(); // Reconfigure the system clock
+    CAN_Init();         // Re-initialize the CAN peripheral
+    UART_Init();        // Re-initialize the UART peripheral
+    GPIO_Status_Init(); // Re-initialize GPIO pins
+#endif
+
+    // Perform a software reset.
+    HAL_NVIC_SystemReset();
+
+    // The code should never reach here, but it's good practice to have
+    // an infinite loop, just in case.
+    while (1) {}
 }
 
 int main(void) {
@@ -56,7 +82,6 @@ int main(void) {
 
     UART_Init();
     CAN_Init();
-    LoadConfig();
 
     while (1) {
         CheckStatusSignals();

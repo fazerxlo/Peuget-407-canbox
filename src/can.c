@@ -158,12 +158,6 @@ void CAN_Init(void) {
 
 }
 
-void LoadConfig(void) {
-
-}
-
-
-
 int CAN_Transmit(uint32_t id, uint8_t *data, uint8_t len) {
     int s;
     s = 0;
@@ -284,9 +278,3 @@ void ProcessCanMessage(uint32_t can_id, uint8_t *data, uint8_t data_len) {
         }
     }
 }
-
-#ifndef USE_QEMU
-void LoadConfig(void) {
-
-}
-#endif // USE_QEMU
