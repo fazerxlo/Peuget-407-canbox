@@ -12,6 +12,7 @@ typedef struct {
     uint8_t buffer[RX_BUFFER_SIZE];
     volatile uint16_t head;
     volatile uint16_t tail;
+    volatile bool overflow;
 } CircularBuffer;
 
 CircularBuffer rx_buffer;
@@ -184,3 +185,76 @@ void QEMU_UART_Receive(uint8_t *data, uint16_t len){
     //it can be used to emulate UART receive in QEMU
 }
 #endif
+
+
+void ReceiveFromAndroid(void) {
+    #ifndef USE_QEMU // Real Hardware implementation
+        static char command_buffer[64]; // Buffer to store the complete command
+        static uint8_t command_index = 0;
+        int16_t received_byte;
+    
+    
+        while (is_data_available()) { // Keep reading until the buffer is empty
+            received_byte = read_byte();
+    
+            if (received_byte == -1) break; // Should not occur, since is_data_available checked
+    
+            if (received_byte == '\n') {
+                // End of command.  Process it.
+                command_buffer[command_index] = '\0'; // Null-terminate
+                char command[4] = {0};
+                char value[32] = {0};
+                char *token;
+                char *saveptr;
+    
+                token = strtok_r(command_buffer, ":\n", &saveptr);
+                if (token != NULL && token[0] == '!') {
+                    strncpy(command, token + 1, 3); // Extract command
+                    token = strtok_r(NULL, ":\n", &saveptr);  //Extract Value
+                    if (token != NULL) {
+                        strncpy(value, token, sizeof(value) - 1);
+                    }
+                    ProcessAndroidCommand(command, value);
+                }
+                command_index = 0; // Reset for the next command
+            } else {
+                // Add the byte to the command buffer (if there's space)
+                if (command_index < sizeof(command_buffer) - 1) {
+                    command_buffer[command_index++] = (char)received_byte;
+                } else {
+                    // Command buffer overflow.  Handle this (e.g., reset index, send error)
+                    command_index = 0; // Simple reset.  A better approach might be to send an error.
+                }
+            }
+            if(rx_buffer.overflow == true){
+                //You can handle overflow here.
+                rx_buffer.overflow = false; //Reset flag
+                command_index = 0; // Clear the command buffer in case of an overflow.
+            }
+        }
+    #else
+       // QEMU version - Reads from stdin - NO CHANGES
+        char buffer[256];
+        if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+            size_t len = strlen(buffer);
+            if (len > 0 && buffer[len - 1] == '\n') {
+                buffer[len - 1] = '\0';
+            }
+    
+            char command[4] = {0};
+            char value[32] = {0};
+            char *token;
+            char *saveptr;
+    
+            token = strtok_r(buffer, ":\n", &saveptr);
+            if (token != NULL && token[0] == '!') {
+                strncpy(command, token + 1, 3);
+                token = strtok_r(NULL, ":\n", &saveptr);
+                if (token != NULL) {
+                    strncpy(value, token, sizeof(value) - 1);
+                }
+                ProcessAndroidCommand(command, value);
+            }
+        }
+    #endif
+    }
