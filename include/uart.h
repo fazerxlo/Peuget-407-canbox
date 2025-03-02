@@ -9,9 +9,16 @@ extern UART_HandleTypeDef huart1; // Declare huart1 as external
 #endif
 
 void UART_Init(void);
-void SendToAndroid(const char *response, const char *value);
 void ReceiveFromAndroid(void);
 #ifndef USE_QEMU
 void USART1_IRQHandler(void);
 #endif
 #endif // UART_H
+
+// uart_processing.h
+#ifndef UART_PROCESSING_H
+#define UART_PROCESSING_H
+
+void ProcessReceivedData(void);
+
+#endif // UART_PROCESSING_H

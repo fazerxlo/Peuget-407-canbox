@@ -7,6 +7,7 @@
 
 // --- Defines (Moved from main.c) ---
 
+
 // --- Android -> CANBox Commands ---
 #define CMD_RESET       "RST"
 #define CMD_KEY         "KEY"
@@ -46,5 +47,8 @@ extern uint32_t config_illum_src;
 extern uint32_t config_rev_src;
 extern uint32_t config_park_src;
 extern uint32_t config_door_src;
+
+void Error_Handler(void);
+void LoadConfig(void); // Assuming LoadConfig is in main.c
 
 #endif // MAIN_H

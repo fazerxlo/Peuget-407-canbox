@@ -37,7 +37,12 @@ void ProcessAndroidCommand(const char *command, const char *value) {
         SendToAndroid(RESP_ERR, ERR_INVALID_COMMAND); // Unknown command
     }
 }
-void send_version(void){
+void SendToAndroid(const char *command, const char *value)
+{
+    
+}
+void send_version(void)
+{
 #ifdef USE_QEMU
     SendToAndroid(RESP_VER, "QEMU_SIM_1.0"); // Example version string
 #else

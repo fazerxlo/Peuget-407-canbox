@@ -58,3 +58,13 @@ void CheckStatusSignals(void) {
     //No need to set door status, it is just for information.
 }
 #endif // Not USE_QEMU
+
+#ifdef USE_QEMU
+
+void CheckStatusSignals(void) {
+    
+}
+
+#endif // USE_QEMU
+
+

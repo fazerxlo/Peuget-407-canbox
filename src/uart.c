@@ -1,23 +1,71 @@
 #include "uart.h"
 #include "commands.h" // For ProcessAndroidCommand
-#include <stdio.h> // Required for QEMU build (printf, fflush)
-#include <string.h> //Required for string functions.
+#include "main.h"  // For Error_Handler
+#include <stdio.h>    // Required for QEMU build (printf, fflush)
+#include <string.h>   // Required for string functions.
 
-#ifndef USE_QEMU
 UART_HandleTypeDef huart1; // Define huart1 here
-#else
-// Minimal placeholder for huart1 in QEMU mode.
-//  We don't *use* it, but the compiler needs to see a definition
-//  because USART1_IRQHandler references it.
+
+// --- Circular Buffer ---
+#define RX_BUFFER_SIZE 128 // Increased buffer size for more robustness
 typedef struct {
-    volatile uint32_t Instance; // Just a dummy member
-} UART_HandleTypeDef;
-UART_HandleTypeDef huart1;
-#endif
-// ... (Rest of UART_Init - No Changes) ...
+    uint8_t buffer[RX_BUFFER_SIZE];
+    volatile uint16_t head;
+    volatile uint16_t tail;
+} CircularBuffer;
+
+CircularBuffer rx_buffer;
+
+// --- Circular Buffer Functions ---
+
+/**
+ * @brief Initializes the circular buffer.
+ */
+void CircularBuffer_Init(CircularBuffer *cb) {
+    cb->head = 0;
+    cb->tail = 0;
+}
+
+/**
+ * @brief Adds a byte to the circular buffer.
+ * @param cb Pointer to the circular buffer.
+ * @param data Byte to add.
+ * @return true if successful, false if buffer is full.
+ */
+bool CircularBuffer_Push(CircularBuffer *cb, uint8_t data) {
+    uint16_t next_head = (cb->head + 1) % RX_BUFFER_SIZE;
+    if (next_head == cb->tail) {
+        // Buffer full
+        return false;
+    }
+    cb->buffer[cb->head] = data;
+    cb->head = next_head;
+    return true;
+}
+
+/**
+ * @brief Retrieves a byte from the circular buffer.
+ * @param cb Pointer to the circular buffer.
+ * @param data Pointer to store the retrieved byte.
+ * @return true if successful, false if buffer is empty.
+ */
+bool CircularBuffer_Pop(CircularBuffer *cb, uint8_t *data) {
+    if (cb->head == cb->tail) {
+        // Buffer empty
+        return false;
+    }
+    *data = cb->buffer[cb->tail];
+    cb->tail = (cb->tail + 1) % RX_BUFFER_SIZE;
+    return true;
+}
+
+// --- UART Initialization ---
 
 void UART_Init(void) {
-// ... (All the UART initialization code from the original main.c) ...
+    // Initialize the circular buffer
+    CircularBuffer_Init(&rx_buffer);
+
+    // Enable USART1 and GPIO clocks
     __HAL_RCC_USART1_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
@@ -36,8 +84,9 @@ void UART_Init(void) {
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+    // Initialize UART parameters
     huart1.Instance = USART1;
-    huart1.Init.BaudRate = UART_BAUD_RATE; // Now defined in main.h
+    huart1.Init.BaudRate = UART_BAUD_RATE; // Defined in main.h
     huart1.Init.WordLength = UART_WORDLENGTH_8B;
     huart1.Init.StopBits = UART_STOPBITS_1;
     huart1.Init.Parity = UART_PARITY_NONE;
@@ -45,6 +94,7 @@ void UART_Init(void) {
     huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
     huart1.Init.OverSampling = UART_OVERSAMPLING_16;
 
+    // Initialize UART with HAL
     if (HAL_UART_Init(&huart1) != HAL_OK) {
         Error_Handler();
     }
@@ -55,22 +105,53 @@ void UART_Init(void) {
     __HAL_UART_ENABLE_IT(&huart1, UART_IT_RXNE);
 }
 
+// --- UART Interrupt Handler (STM32) ---
 #ifndef USE_QEMU
 void USART1_IRQHandler(void) {
- // ... (All the UART RX interrupt handler code) ...
-     if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE)) {
-        static uint8_t rx_buffer[64];
-        static uint8_t rx_index = 0;
+    // Check if there is RX data available and no error occurred.
+    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) &&
+        !(__HAL_UART_GET_FLAG(&huart1, UART_FLAG_ORE) ||
+          __HAL_UART_GET_FLAG(&huart1, UART_FLAG_NE) ||
+          __HAL_UART_GET_FLAG(&huart1, UART_FLAG_FE))) {
         uint8_t received_byte = (uint8_t)(huart1.Instance->DR & 0xFF);
 
-        if (received_byte == '\n') {
-            rx_buffer[rx_index] = '\0'; // Null-terminate
+        // Push the received byte into the circular buffer
+        if (!CircularBuffer_Push(&rx_buffer, received_byte)) {
+            // Buffer overflow, handle error (e.g., log error, discard data)
+            // You can add custom error handling here, e.g.:
+             // Error_Handler(); // Or a custom error handler
+        }
+    }
+    if(__HAL_UART_GET_FLAG(&huart1, UART_FLAG_ORE)) {
+        __HAL_UART_CLEAR_OREFLAG(&huart1); //Clear Overrun error flag
+    }
+    if(__HAL_UART_GET_FLAG(&huart1, UART_FLAG_NE)) {
+       __HAL_UART_CLEAR_NEFLAG(&huart1); //Clear Noise Error flag
+    }
+    if(__HAL_UART_GET_FLAG(&huart1, UART_FLAG_FE)) {
+        __HAL_UART_CLEAR_FEFLAG(&huart1); //Clear Framing Error flag
+    }
+    // Process the buffer
+    ProcessReceivedData();
+
+    HAL_UART_IRQHandler(&huart1);
+}
+#endif
+// --- Data Processing ---
+void ProcessReceivedData(void) {
+    static uint8_t process_buffer[RX_BUFFER_SIZE]; // Buffer to store message to process
+    static uint16_t process_index = 0;            // Index for message to process
+
+    uint8_t byte;
+    while (CircularBuffer_Pop(&rx_buffer, &byte)) {
+        if (byte == '\n') {
+            process_buffer[process_index] = '\0'; // Null-terminate
+            // Process the received message
             char command[4] = {0};
             char value[32] = {0};
             char *token;
             char *saveptr;
-
-            token = strtok_r((char *)rx_buffer, ":\n", &saveptr);
+            token = strtok_r((char *)process_buffer, ":\n", &saveptr);
             if (token != NULL && token[0] == '!') {
                 strncpy(command, token + 1, 3);
                 token = strtok_r(NULL, ":\n", &saveptr);
@@ -79,56 +160,27 @@ void USART1_IRQHandler(void) {
                 }
                 ProcessAndroidCommand(command, value);
             }
-            rx_index = 0; // Reset for the next message.
+
+            // Reset for the next message
+            process_index = 0;
         } else {
-            if (rx_index < sizeof(rx_buffer) - 1) {
-                rx_buffer[rx_index++] = received_byte;
-            } // else:  Buffer overflow - handle or ignore
-        }
-        __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE);
-    }
-    HAL_UART_IRQHandler(&huart1);
-}
-#endif
-
-void SendToAndroid(const char *response, const char *value) {
-#ifdef USE_QEMU
-    printf("!%s:%s\n", response, value);
-    fflush(stdout);
-#else
-    char message[64];
-    snprintf(message, sizeof(message), "!%s:%s\n", response, value);
-    HAL_UART_Transmit(&huart1, (uint8_t *)message, strlen(message), HAL_MAX_DELAY);
-#endif
-}
-
-void ReceiveFromAndroid(void) {
-#ifndef USE_QEMU
-    // UART RX is interrupt-driven, so this function is empty in the real HW build
-#else
- // QEMU version - Reads from stdin
-    // ... (QEMU stdin handling - Remains unchanged) ...
-     char buffer[256];
-    if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
-        size_t len = strlen(buffer);
-        if (len > 0 && buffer[len - 1] == '\n') {
-            buffer[len - 1] = '\0';
-        }
-
-        char command[4] = {0};
-        char value[32] = {0};
-        char *token;
-        char *saveptr;
-
-        token = strtok_r(buffer, ":\n", &saveptr);
-        if (token != NULL && token[0] == '!') {
-            strncpy(command, token + 1, 3);
-            token = strtok_r(NULL, ":\n", &saveptr);
-            if (token != NULL) {
-                strncpy(value, token, sizeof(value) - 1);
+            // Add byte to process buffer
+            if (process_index < sizeof(process_buffer) - 1) {
+                process_buffer[process_index++] = byte;
+            } else {
+                // Process buffer overflow, reset and discard received message
+                process_index = 0;
             }
-            ProcessAndroidCommand(command, value);
         }
     }
-#endif
 }
+#ifdef USE_QEMU
+void QEMU_UART_Transmit(uint8_t *data, uint16_t len){
+     printf("%s",data);
+     fflush(stdout);
+}
+void QEMU_UART_Receive(uint8_t *data, uint16_t len){
+    //This function is not used in this version
+    //it can be used to emulate UART receive in QEMU
+}
+#endif

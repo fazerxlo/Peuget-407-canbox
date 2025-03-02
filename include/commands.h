@@ -4,6 +4,7 @@
 #include "main.h"
 
 void ProcessAndroidCommand(const char *command, const char *value);
+void SendToAndroid(const char *command, const char *value);
 void send_version(void);
 
 #endif // COMMANDS_H

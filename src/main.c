@@ -1,32 +1,12 @@
 #include "main.h"
-#include "can.h"
 #include "uart.h"
+#include "can.h"
+#include "commands.h"
 #include "config.h"
 #include "signals.h"
-#include "commands.h"
-#include <stdio.h>
 
-int main(void) {
-    HAL_Init();
-    SystemClock_Config();
-
-#ifndef USE_QEMU
-    CAN_Init();
-    UART_Init();
-    GPIO_Status_Init();
-    load_config(); // Load configuration from flash
-#endif
-
-    send_version();  // Send version at startup (defined in commands.c)
-    SendToAndroid(RESP_OK, "INIT");
-
-    while (1) {
-        ReceiveFromAndroid(); // UART reception is interrupt-driven
-#ifndef USE_QEMU
-        CheckStatusSignals(); // Update output signals
-#endif
-    }
-}
+void SystemClock_Config(void);
+void Error_Handler(void);
 
 void SystemClock_Config(void) {
     // ... (Clock configuration code - Remains unchanged) ...
@@ -58,17 +38,27 @@ void SystemClock_Config(void) {
   }
 }
 
+/**
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
 void Error_Handler(void) {
+    /* User can add his own implementation to report the HAL error return state */
     __disable_irq();
-#ifndef USE_QEMU
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); // Turn off LED
+    while (1) {
+    }
+}
+
+int main(void) {
+    HAL_Init();
+
+    SystemClock_Config();
+
+    UART_Init();
+    CAN_Init();
+    LoadConfig();
 
     while (1) {
-        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-        HAL_Delay(100);
+        CheckStatusSignals();
     }
-#else
-    fprintf(stderr, "Error occurred!\n");
-    while (1) {}
-#endif
 }
